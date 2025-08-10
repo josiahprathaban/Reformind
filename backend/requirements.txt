@@ -1,0 +1,9 @@
+fastapi==0.103.1
+uvicorn==0.23.2
+llama-index-core>=0.10.0
+llama-index-embeddings-huggingface>=0.1.0
+llama-index-llms-huggingface>=0.1.0
+transformers>=4.33.1
+sentence-transformers>=2.2.2
+pydantic>=2.3.0
+python-dotenv>=1.0.0
