@@ -17,6 +17,7 @@ from llama_index.core import (
     Settings
 )
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+import torch
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -82,14 +83,35 @@ def create_and_persist_index(documents: List[Document]) -> VectorStoreIndex:
     logger.info("Creating vector index...")
     
     try:
-        # Create embedding model
-        embed_model = HuggingFaceEmbedding(model_name=EMBEDDING_MODEL_NAME)
+        # Check if CUDA is available and set up device
+        device = "cpu"
+        if torch.cuda.is_available():
+            logger.info(f"CUDA is available for embeddings! Using GPU: {torch.cuda.get_device_name(0)}")
+            device = "cuda"
+        elif hasattr(torch, 'xpu') and torch.xpu.is_available():
+            # Intel XPU acceleration (for Intel Arc GPUs)
+            logger.info(f"Intel XPU is available for embeddings! Using Intel GPU")
+            device = "xpu"
+        else:
+            logger.info("Using CPU for embeddings with optimized settings")
+        
+        # Create embedding model (don't pass device directly as it causes errors)
+        embed_model = HuggingFaceEmbedding(
+            model_name=EMBEDDING_MODEL_NAME,
+            embed_batch_size=32  # Increase batch size for better performance
+        )
         
         # Configure settings with the embedding model
         Settings.embed_model = embed_model
         
-        # Create and persist the index
-        index = VectorStoreIndex.from_documents(documents)
+        # Log the number of documents being indexed
+        logger.info(f"Indexing {len(documents)} documents...")
+        
+        # Create and persist the index with optimized settings
+        index = VectorStoreIndex.from_documents(
+            documents,
+            show_progress=True,  # Show progress bar
+        )
         
         # Persist index to disk
         if not os.path.exists(INDEX_STORAGE_PATH):
@@ -112,15 +134,30 @@ def load_or_create_index() -> VectorStoreIndex:
         VectorStoreIndex object
     """
     try:
+        # Check if CUDA is available and set up device
+        device = "cpu"
+        if torch.cuda.is_available():
+            logger.info(f"CUDA is available for embeddings! Using GPU: {torch.cuda.get_device_name(0)}")
+            device = "cuda"
+        elif hasattr(torch, 'xpu') and torch.xpu.is_available():
+            # Intel XPU acceleration (for Intel Arc GPUs)
+            logger.info(f"Intel XPU is available for embeddings! Using Intel GPU")
+            device = "xpu"
+        else:
+            logger.info("Using CPU for embeddings with optimized settings")
+        
+        # Create embedding model (don't pass device directly as it causes errors)
+        embed_model = HuggingFaceEmbedding(
+            model_name=EMBEDDING_MODEL_NAME,
+            embed_batch_size=32  # Increase batch size for better performance
+        )
+        
+        # Configure settings with the embedding model
+        Settings.embed_model = embed_model
+        
         # Check if index exists
         if os.path.exists(INDEX_STORAGE_PATH):
             logger.info(f"Loading existing index from: {INDEX_STORAGE_PATH}")
-            
-            # Create embedding model
-            embed_model = HuggingFaceEmbedding(model_name=EMBEDDING_MODEL_NAME)
-            
-            # Configure settings with the embedding model
-            Settings.embed_model = embed_model
             
             # Load index from disk
             storage_context = StorageContext.from_defaults(persist_dir=INDEX_STORAGE_PATH)

@@ -1,13 +1,60 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import axios from 'axios'
+import ReactMarkdown from 'react-markdown'
 
 export default function Home() {
   const [question, setQuestion] = useState('')
   const [answer, setAnswer] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
+  const [requestId, setRequestId] = useState<string | null>(null)
+  const [pollingCount, setPollingCount] = useState(0)
+
+  // Add a polling effect to check for response
+  useEffect(() => {
+    // Only poll if we have a requestId and are still loading
+    if (requestId && isLoading && pollingCount < 30) { // Increased to 30 attempts (2.5 minutes at 5s intervals)
+      const pollTimer = setTimeout(async () => {
+        try {
+          console.log(`Polling for response (attempt ${pollingCount + 1})...`);
+          const response = await axios.get(`/api/status/${requestId}`, {
+            timeout: 10000
+          });
+          
+          if (response.data.status === 'completed') {
+            setAnswer(response.data.answer);
+            setIsLoading(false);
+            setRequestId(null);
+            setPollingCount(0);
+          } else if (response.data.status === 'failed') {
+            setError(response.data.error || 'Processing failed. Please try again.');
+            setIsLoading(false);
+            setRequestId(null);
+            setPollingCount(0);
+          } else {
+            // Still processing, increment polling count and continue
+            setPollingCount(prev => prev + 1);
+          }
+        } catch (err) {
+          console.error('Error polling for response:', err);
+          // Continue polling even on error
+          setPollingCount(prev => prev + 1);
+        }
+      }, 5000); // Poll every 5 seconds
+      
+      return () => clearTimeout(pollTimer);
+    } else if (pollingCount >= 30) {
+      // Give up after 30 attempts (2.5 minutes)
+      setIsLoading(false);
+      setError('The request is taking longer than expected. Your question will continue processing in the background. Please check back in a few minutes.');
+      setRequestId(null);
+      setPollingCount(0);
+    }
+  }, [requestId, isLoading, pollingCount]);
+
+  const [lastRequestId, setLastRequestId] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -19,18 +66,77 @@ export default function Home() {
 
     setIsLoading(true)
     setError('')
+    setAnswer('')
+    setRequestId(null)
+    setPollingCount(0)
     
     try {
-      // Query the backend
-      const response = await axios.post('/api/query', { question })
-      setAnswer(response.data.answer)
+      // Query the backend with increased timeout
+      const response = await axios.post('/api/query', { question }, {
+        timeout: 60000, // 1 minute timeout
+      });
+      
+      if (response.data.answer) {
+        setAnswer(response.data.answer);
+      } else if (response.data.requestId) {
+        // If we get a requestId, it means the request is being processed asynchronously
+        const newRequestId = response.data.requestId;
+        setRequestId(newRequestId);
+        setLastRequestId(newRequestId);
+        // Polling will be handled by the useEffect
+      }
     } catch (err: any) {
       console.error('Error querying Reformind:', err)
-      setError(err.response?.data?.detail || 'An error occurred while processing your question')
-    } finally {
-      setIsLoading(false)
+      
+      if (err.response?.data?.requestId) {
+        // Even on timeout, if we have a requestId, we can poll for results
+        const newRequestId = err.response.data.requestId;
+        setRequestId(newRequestId);
+        setLastRequestId(newRequestId);
+      } else {
+        // Provide more specific error messages
+        if (err.code === 'ECONNABORTED') {
+          setError('The request took too long to complete. The system is still processing your question. Please try again in a moment.');
+        } else if (err.response?.status === 504) {
+          setError('The server took too long to respond. Your question may be complex and require more processing time.');
+        } else {
+          setError(err.response?.data?.detail || 'An error occurred while processing your question');
+          setIsLoading(false);
+        }
+      }
     }
   }
+
+  const checkLastRequest = async () => {
+    if (!lastRequestId) {
+      setError('No previous request to check');
+      return;
+    }
+    
+    setIsLoading(true);
+    setError('');
+    
+    try {
+      const response = await axios.get(`/api/status/${lastRequestId}`, {
+        timeout: 10000
+      });
+      
+      if (response.data.status === 'completed') {
+        setAnswer(response.data.answer);
+        setIsLoading(false);
+      } else if (response.data.status === 'failed') {
+        setError(response.data.error || 'Processing failed. Please try again.');
+        setIsLoading(false);
+      } else {
+        setError('Your request is still being processed. Please check back later.');
+        setIsLoading(false);
+      }
+    } catch (err: any) {
+      console.error('Error checking last request:', err);
+      setError('Error checking request status. The request may have expired.');
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div className="container mx-auto px-4 py-8 flex flex-col flex-grow">
@@ -61,6 +167,17 @@ export default function Home() {
           >
             {isLoading ? 'Asking...' : 'Ask Reformind'}
           </button>
+          
+          {lastRequestId && !requestId && (
+            <button 
+              type="button"
+              onClick={checkLastRequest}
+              className="ml-4 px-4 py-2 rounded text-primary-700 border border-primary-700 hover:bg-primary-50"
+              disabled={isLoading}
+            >
+              Check Last Request
+            </button>
+          )}
         </form>
 
         {error && (
@@ -73,7 +190,28 @@ export default function Home() {
           <div className="text-center py-8">
             <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-primary-600 border-r-transparent"></div>
             <p className="mt-2 text-gray-600">Consulting Scripture and Reformed theology...</p>
-            <p className="mt-1 text-gray-500 text-sm italic">This may take a moment as I reflect on God&apos;s Word</p>
+            {pollingCount > 0 && (
+              <div>
+                <p className="mt-1 text-primary-600">
+                  Still processing your question. Bible interpretation takes time...
+                  {pollingCount > 3 && " This is a deep theological question!"}
+                </p>
+                <div className="w-full max-w-xs mx-auto bg-gray-200 rounded-full h-2.5 mt-3">
+                  <div 
+                    className="bg-primary-600 h-2.5 rounded-full" 
+                    style={{ width: `${Math.min(100, (pollingCount / 30) * 100)}%` }}
+                  ></div>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  {pollingCount < 10 ? "Initial processing..." : 
+                   pollingCount < 20 ? "Analyzing Scripture..." : 
+                   "Finalizing response..."}
+                </p>
+              </div>
+            )}
+            <p className="mt-3 text-gray-500 text-sm italic">
+              {requestId ? "Your request is being processed in the background." : "Reflecting on God's Word"}
+            </p>
           </div>
         )}
 
@@ -81,20 +219,24 @@ export default function Home() {
           <div className="bg-white p-6 rounded-lg shadow-md">
             <h2 className="text-xl font-semibold mb-4 text-primary-800">Answer:</h2>
             <div className="prose max-w-none">
-              {answer.split('\n\n').map((paragraph, i) => {
-                // Check if this is a Scripture References section
-                if (paragraph.includes("**Scripture References:**")) {
-                  return (
-                    <div key={i} className="mt-4 p-3 bg-gray-50 rounded border border-gray-200">
-                      <h3 className="font-semibold text-primary-700">Scripture References:</h3>
-                      {paragraph.replace("**Scripture References:**", "").split('\n').map((line, j) => (
-                        <p key={`${i}-${j}`} className="text-sm mb-1">{line}</p>
-                      ))}
-                    </div>
-                  );
-                }
-                return <p key={i} className="mb-4">{paragraph}</p>;
-              })}
+              <ReactMarkdown
+                components={{
+                  // Customize how different markdown elements are rendered
+                  h1: ({node, ...props}) => <h1 className="text-2xl font-bold mt-6 mb-4 text-primary-800" {...props} />,
+                  h2: ({node, ...props}) => <h2 className="text-xl font-bold mt-5 mb-3 text-primary-700" {...props} />,
+                  h3: ({node, ...props}) => <h3 className="text-lg font-bold mt-4 mb-2 text-primary-600" {...props} />,
+                  p: ({node, ...props}) => <p className="mb-4" {...props} />,
+                  strong: ({node, ...props}) => <strong className="font-bold text-primary-700" {...props} />,
+                  blockquote: ({node, ...props}) => (
+                    <blockquote className="pl-4 border-l-4 border-gray-300 italic text-gray-700 my-4" {...props} />
+                  ),
+                  ul: ({node, ...props}) => <ul className="list-disc pl-5 mb-4" {...props} />,
+                  ol: ({node, ...props}) => <ol className="list-decimal pl-5 mb-4" {...props} />,
+                  li: ({node, ...props}) => <li className="mb-1" {...props} />,
+                }}
+              >
+                {answer}
+              </ReactMarkdown>
             </div>
           </div>
         )}
