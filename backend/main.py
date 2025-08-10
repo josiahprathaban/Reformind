@@ -12,6 +12,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from llama_index.core.settings import Settings
+from llama_index.core.prompts import PromptTemplate
 from llama_index.llms.huggingface import HuggingFaceLLM
 
 from indexer import load_or_create_index
@@ -50,21 +51,47 @@ try:
         # Configure a simple HuggingFace model for text generation
         try:
             llm = HuggingFaceLLM(
-                model_name="gpt2",
-                tokenizer_name="gpt2",
-                context_window=1024,
-                max_new_tokens=256,
-                generate_kwargs={"temperature": 0.7, "do_sample": True},
+                model_name="microsoft/phi-2",
+                tokenizer_name="microsoft/phi-2",
+                context_window=2048,
+                max_new_tokens=512,
+                generate_kwargs={"temperature": 0.5, "do_sample": True, "top_p": 0.95},
                 device_map="auto",
             )
             
             # Set the LLM in global settings
             Settings.llm = llm
             
+            # Create a custom prompt for Reformed theological responses
+            qa_template = PromptTemplate(
+                """\
+You are Reformind, a Reformed Christian AI pastor, trained to provide biblical answers based on Scripture and Reformed doctrine.
+
+When answering questions, always:
+1. Use Scripture as your primary authority
+2. Reflect Reformed theological understanding
+3. Provide clear reasoning
+4. Cite relevant Bible verses
+5. Be pastoral and edifying in tone
+
+Consider these passages from Scripture that are relevant to the question:
+{context_str}
+
+USER QUESTION: {query_str}
+
+Answer the question thoroughly from a Reformed perspective, using the scripture passages above as your primary source. 
+Structure your response with clear reasoning, biblical evidence, and application. 
+Be concise but complete in your explanation.
+
+YOUR ANSWER:
+"""
+            )
+            
             # Create query engine with LLM for synthesis
             query_engine = index.as_query_engine(
-                response_mode="refine",  # Use refine mode for better synthesis of multiple sources
-                similarity_top_k=5,
+                response_mode="tree_summarize",  # Better mode for synthesizing multiple sources
+                similarity_top_k=7,  # Retrieve more relevant passages
+                text_qa_template=qa_template,
                 verbose=True
             )
             logger.info("Using LLM for response generation")
@@ -119,13 +146,27 @@ async def query_bible(request: QueryRequest) -> Dict[str, Any]:
             # When using an LLM, the response is already synthesized
             formatted_answer = str(response)
             
-            # Add source references if available
+            # Add source references and organize them better
             try:
                 if hasattr(response, 'source_nodes') and response.source_nodes:
-                    formatted_answer += "\n\nScripture References:\n"
-                    for i, node in enumerate(response.source_nodes):
+                    scripture_refs = {}
+                    
+                    # Group by book for better organization
+                    for node in response.source_nodes:
                         if "reference" in node.metadata:
-                            formatted_answer += f"- {node.metadata['reference']}\n"
+                            ref = node.metadata['reference']
+                            book = ref.split()[0]  # Extract book name
+                            if book not in scripture_refs:
+                                scripture_refs[book] = []
+                            scripture_refs[book].append(ref)
+                    
+                    if scripture_refs:
+                        formatted_answer += "\n\n**Scripture References:**\n"
+                        for book, refs in scripture_refs.items():
+                            formatted_answer += f"\n{book}: {', '.join(refs)}\n"
+                            
+                        # Add a concluding statement
+                        formatted_answer += "\n\nMay these scriptures guide your understanding according to Reformed doctrine."
             except Exception as e:
                 logger.warning(f"Error formatting source references: {str(e)}")
         else:

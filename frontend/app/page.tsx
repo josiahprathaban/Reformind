@@ -72,17 +72,29 @@ export default function Home() {
         {isLoading && (
           <div className="text-center py-8">
             <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-primary-600 border-r-transparent"></div>
-            <p className="mt-2 text-gray-600">Consulting Scripture...</p>
+            <p className="mt-2 text-gray-600">Consulting Scripture and Reformed theology...</p>
+            <p className="mt-1 text-gray-500 text-sm italic">This may take a moment as I reflect on God&apos;s Word</p>
           </div>
         )}
 
         {answer && !isLoading && (
           <div className="bg-white p-6 rounded-lg shadow-md">
             <h2 className="text-xl font-semibold mb-4 text-primary-800">Answer:</h2>
-            <div className="prose">
-              {answer.split('\n').map((paragraph, i) => (
-                <p key={i} className="mb-4">{paragraph}</p>
-              ))}
+            <div className="prose max-w-none">
+              {answer.split('\n\n').map((paragraph, i) => {
+                // Check if this is a Scripture References section
+                if (paragraph.includes("**Scripture References:**")) {
+                  return (
+                    <div key={i} className="mt-4 p-3 bg-gray-50 rounded border border-gray-200">
+                      <h3 className="font-semibold text-primary-700">Scripture References:</h3>
+                      {paragraph.replace("**Scripture References:**", "").split('\n').map((line, j) => (
+                        <p key={`${i}-${j}`} className="text-sm mb-1">{line}</p>
+                      ))}
+                    </div>
+                  );
+                }
+                return <p key={i} className="mb-4">{paragraph}</p>;
+              })}
             </div>
           </div>
         )}
