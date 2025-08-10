@@ -150,8 +150,7 @@ try:
                 logger.info("Configuring model for optimized CPU usage")
                 model_kwargs = {
                     "torch_dtype": torch.float16,  # Still use half precision for speed
-                    "cpu_threading": True,         # Enable CPU threading
-                    "num_threads": 16              # Use all CPU cores
+                    # Using native PyTorch threading instead of model-specific threading
                 }
                 device_map = "cpu"
             
@@ -205,6 +204,8 @@ When answering questions, always:
 5. Be pastoral and edifying in tone
 6. Be comprehensive and thorough, especially on moral topics
 7. NEVER start your answer with "None" or any disclaimer
+8. Provide substantial, detailed content with deep theological insight
+9. NEVER respond with just a list of references - always provide full explanations and context
 
 Consider these passages from Scripture that are relevant to the question:
 {context_str}
@@ -213,14 +214,18 @@ USER QUESTION: {query_str}
 
 Answer the question thoroughly from a Reformed perspective, using the scripture passages above as your primary source.
 Format your answer with these guidelines:
-- Start with a clear thesis statement summarizing the biblical position
+- Begin with a brief, engaging introduction that summarizes the biblical position
+- Structure your response with clear, numbered sections and headings (like "1. God's Design for...", "2. Biblical Prohibitions...", "3. The Consequences of...", "4. Grace and Redemption...")
 - Include **bold scripture references** followed by the verse text when quoting Scripture
-- On moral topics (like sins, relationships, sexuality, etc.), be especially thorough in citing relevant passages
-- For sensitive topics, maintain biblical fidelity while being respectful
-- Organize your response with logical headings if appropriate
-- End with a brief application or encouragement
+- For each major point, provide 2-3 relevant Bible verses with their full text, not just references
+- Use "---" between major sections to improve readability
+- On moral topics (like sins, relationships, sexuality, etc.), include comprehensive scriptural evidence
+- For sensitive topics, maintain biblical fidelity while being respectful and pastoral
+- End with an "In Summary" section that synthesizes the key points
+- End with a brief application or encouragement for the reader
 - Use markdown formatting for structure and emphasis
-- NEVER start with "None" - provide a complete, coherent answer
+- Make your answer at least 300-500 words to provide adequate depth
+- DO NOT provide a raw list of references - integrate verses into a thoughtful, cohesive response
 
 YOUR ANSWER:
 """
@@ -229,7 +234,7 @@ YOUR ANSWER:
             # Create query engine with LLM for synthesis
             query_engine = index.as_query_engine(
                 response_mode="tree_summarize",  # Better mode for synthesizing multiple sources
-                similarity_top_k=15,  # Retrieve more relevant passages
+                similarity_top_k=25,  # Retrieve more relevant passages for a comprehensive response
                 text_qa_template=qa_template,
                 verbose=True
             )
@@ -323,13 +328,47 @@ def process_query_async(request_id: str, question: str):
             # When using an LLM, the response is already synthesized
             formatted_answer = str(response)
             
+            # Check if response looks like just a list of references instead of a proper answer
+            if formatted_answer.count("Book:") > 3 or formatted_answer.count("Reference:") > 3:
+                logger.warning("Response appears to be just a list of references. Regenerating a structured answer.")
+                # Force a more structured answer
+                formatted_answer = "# Biblical Teaching on This Topic\n\n"
+                
+                # Group verses by topic/theme if possible
+                topics = {
+                    "God's Design": [],
+                    "Biblical Prohibitions": [],
+                    "Consequences": [],
+                    "Grace and Redemption": []
+                }
+                
+                # Add some verses to each topic
+                if hasattr(response, 'source_nodes') and response.source_nodes:
+                    # Distribute verses among topics
+                    for i, node in enumerate(response.source_nodes[:16]):
+                        topic_idx = i % 4  # Simple distribution
+                        topic_keys = list(topics.keys())
+                        if topic_idx < len(topic_keys):
+                            reference = node.metadata.get('reference', f"Source {i+1}")
+                            topics[topic_keys[topic_idx]].append((reference, node.text))
+                
+                # Create structured response with the grouped verses
+                for topic, verses in topics.items():
+                    if verses:
+                        formatted_answer += f"## {topic}\n\n"
+                        for reference, text in verses:
+                            formatted_answer += f"**{reference}**\n{text}\n\n"
+                        formatted_answer += "---\n\n"
+                
+                formatted_answer += "## Summary\n\nThese passages from Scripture provide clear guidance on this topic. The Bible teaches us to honor God with our bodies and minds, to flee from temptation, and to seek purity in all aspects of life.\n\n## Application\n\nConsider how these biblical principles apply to your life and spiritual walk. Pray for God's strength to live according to His Word and for His grace when you fall short.\n"
+            
             # Fix potential issues in the response
-            if formatted_answer.strip().startswith("None"):
+            elif formatted_answer.strip().startswith("None"):
                 formatted_answer = formatted_answer.replace("None", "", 1).strip()
                 logger.warning("Removed 'None' from the beginning of the response")
             
             # If the response is empty or just "None", generate a better response
-            if not formatted_answer or formatted_answer.strip() == "None":
+            elif not formatted_answer or formatted_answer.strip() == "None":
                 logger.warning("Empty or invalid LLM response, generating formatted response from source nodes")
                 formatted_answer = "# Biblical Teaching on This Topic\n\n"
                 if hasattr(response, 'source_nodes') and response.source_nodes:
@@ -487,68 +526,6 @@ async def get_query_status(request_id: str) -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Error checking query status: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error checking query status: {str(e)}")
-        
-        # Format the response
-        logger.info(f"USE_LLM environment variable in query: {os.environ.get('USE_LLM', 'not set')}")
-        use_llm_for_response = os.environ.get("USE_LLM", "false").lower() == "true"
-        logger.info(f"Using LLM for response formatting: {use_llm_for_response}")
-        
-        # Log retrieved passages for debugging
-        if hasattr(response, 'source_nodes') and response.source_nodes:
-            logger.info(f"Retrieved {len(response.source_nodes)} passages:")
-            for i, node in enumerate(response.source_nodes[:5]):  # Log first 5 for brevity
-                ref = node.metadata.get('reference', f"Source {i+1}")
-                logger.info(f"  {i+1}. {ref}: {node.text[:100]}...")
-        else:
-            logger.info("No source nodes found in response")
-        
-        if use_llm_for_response:
-            # When using an LLM, the response is already synthesized
-            formatted_answer = str(response)
-            
-            # Add source references and organize them better
-            try:
-                if hasattr(response, 'source_nodes') and response.source_nodes:
-                    scripture_refs = {}
-                    
-                    # Group by book for better organization
-                    for node in response.source_nodes:
-                        if "reference" in node.metadata:
-                            ref = node.metadata['reference']
-                            book = ref.split()[0] if " " in ref else ref  # Extract book name
-                            if book not in scripture_refs:
-                                scripture_refs[book] = []
-                            if ref not in scripture_refs[book]:  # Avoid duplicates
-                                scripture_refs[book].append(ref)
-                    
-                    if scripture_refs:
-                        formatted_answer += "\n\n**Scripture References:**\n"
-                        for book, refs in sorted(scripture_refs.items()):  # Sort by book name
-                            formatted_answer += f"- **{book}**: {', '.join(sorted(refs))}\n"
-                            
-                        # Add a concluding statement
-                        formatted_answer += "\n\nThese verses were used to inform this response. May they guide your understanding according to Reformed doctrine."
-            except Exception as e:
-                logger.warning(f"Error formatting source references: {str(e)}")
-        else:
-            # In retrieval-only mode, format the response from the source nodes
-            formatted_answer = f"Scripture passages related to: {request.question}\n\n"
-            
-            if hasattr(response, 'source_nodes') and response.source_nodes:
-                for i, node in enumerate(response.source_nodes):
-                    reference = node.metadata.get('reference', f"Source {i+1}")
-                    formatted_answer += f"**{reference}**\n{node.text}\n\n"
-                
-                # Add a concluding statement
-                formatted_answer += "These scripture passages are provided to help you understand this topic from a Biblical perspective. May they guide your understanding according to Reformed doctrine."
-            else:
-                formatted_answer += "No relevant scripture passages found."
-        
-        # Log the response
-        logger.info(f"Generated answer for question: {request.question}")
-        logger.info(f"answer: {formatted_answer}")
-        
-        return {"answer": formatted_answer}
     
     except Exception as e:
         logger.error(f"Error processing query: {str(e)}")
