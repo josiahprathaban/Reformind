@@ -139,16 +139,16 @@ export default function Home() {
   };
 
   return (
-    <div className="container mx-auto px-4 py-8 flex flex-col flex-grow">
-      <header className="mb-8 text-center">
-        <h1 className="text-4xl font-bold text-primary-800 mb-2">Reformind</h1>
-        <p className="text-xl text-gray-600">Your Reformed AI Pastor</p>
+    <div className="container mx-auto px-4 py-8 flex flex-col flex-grow relative">     
+      <header className="mb-8 text-center relative z-10">
+        <h1 className="text-4xl font-bold text-primary-400 mb-2">Reformind</h1>
+        <p className="text-xl text-gray-300">Your Reformed AI Pastor</p>
       </header>
 
-      <div className="max-w-3xl mx-auto w-full flex-grow flex flex-col">
+      <div className="max-w-3xl mx-auto w-full flex-grow flex flex-col relative z-10">
         <form onSubmit={handleSubmit} className="mb-6">
           <div className="mb-4">
-            <label htmlFor="question" className="block text-gray-700 mb-2 font-medium">
+            <label htmlFor="question" className="block text-gray-300 mb-2 font-medium">
               Ask a theological question:
             </label>
             <textarea
@@ -172,7 +172,7 @@ export default function Home() {
             <button 
               type="button"
               onClick={checkLastRequest}
-              className="ml-4 px-4 py-2 rounded text-primary-700 border border-primary-700 hover:bg-primary-50"
+              className="ml-4 px-4 py-2 rounded text-primary-400 border border-primary-500 hover:bg-dark-600 hover:bg-opacity-20 transition-all duration-300"
               disabled={isLoading}
             >
               Check Last Request
@@ -181,57 +181,57 @@ export default function Home() {
         </form>
 
         {error && (
-          <div className="p-4 mb-4 bg-red-100 border-l-4 border-red-500 text-red-700">
+          <div className="error-card">
             <p>{error}</p>
           </div>
         )}
 
         {isLoading && (
-          <div className="text-center py-8">
-            <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-primary-600 border-r-transparent"></div>
-            <p className="mt-2 text-gray-600">Consulting Scripture and Reformed theology...</p>
+          <div className="text-center py-8 glass-card rounded-lg p-6">
+            <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-primary-400 border-r-transparent"></div>
+            <p className="mt-2 text-gray-300">Consulting Scripture and Reformed theology...</p>
             {pollingCount > 0 && (
               <div>
-                <p className="mt-1 text-primary-600">
+                <p className="mt-1 text-primary-400">
                   Still processing your question. Bible interpretation takes time...
                   {pollingCount > 3 && " This is a deep theological question!"}
                 </p>
-                <div className="w-full max-w-xs mx-auto bg-gray-200 rounded-full h-2.5 mt-3">
+                <div className="w-full max-w-xs mx-auto bg-dark-400 rounded-full h-2.5 mt-3">
                   <div 
-                    className="bg-primary-600 h-2.5 rounded-full" 
+                    className="bg-primary-500 h-2.5 rounded-full" 
                     style={{ width: `${Math.min(100, (pollingCount / 30) * 100)}%` }}
                   ></div>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-gray-400 mt-1">
                   {pollingCount < 10 ? "Initial processing..." : 
                    pollingCount < 20 ? "Analyzing Scripture..." : 
                    "Finalizing response..."}
                 </p>
               </div>
             )}
-            <p className="mt-3 text-gray-500 text-sm italic">
+            <p className="mt-3 text-gray-400 text-sm italic">
               {requestId ? "Your request is being processed in the background." : "Reflecting on God's Word"}
             </p>
           </div>
         )}
 
         {answer && !isLoading && (
-          <div className="bg-white p-6 rounded-lg shadow-md">
-            <h2 className="text-xl font-semibold mb-4 text-primary-800">Answer:</h2>
-            <div className="prose max-w-none">
+          <div className="glass-card rounded-lg p-6">
+            <h2 className="text-xl font-semibold mb-4 text-primary-400">Answer:</h2>
+            <div className="prose prose-invert max-w-none">
               <ReactMarkdown
                 components={{
                   // Customize how different markdown elements are rendered
-                  h1: ({node, ...props}) => <h1 className="text-2xl font-bold mt-6 mb-4 text-primary-800" {...props} />,
-                  h2: ({node, ...props}) => <h2 className="text-xl font-bold mt-5 mb-3 text-primary-700" {...props} />,
-                  h3: ({node, ...props}) => <h3 className="text-lg font-bold mt-4 mb-2 text-primary-600" {...props} />,
-                  p: ({node, ...props}) => <p className="mb-4" {...props} />,
-                  strong: ({node, ...props}) => <strong className="font-bold text-primary-700" {...props} />,
+                  h1: ({node, ...props}) => <h1 className="text-2xl font-bold mt-6 mb-4 text-primary-400" {...props} />,
+                  h2: ({node, ...props}) => <h2 className="text-xl font-bold mt-5 mb-3 text-primary-400" {...props} />,
+                  h3: ({node, ...props}) => <h3 className="text-lg font-bold mt-4 mb-2 text-primary-500" {...props} />,
+                  p: ({node, ...props}) => <p className="mb-4 text-gray-300" {...props} />,
+                  strong: ({node, ...props}) => <strong className="font-bold text-primary-400" {...props} />,
                   blockquote: ({node, ...props}) => (
-                    <blockquote className="pl-4 border-l-4 border-gray-300 italic text-gray-700 my-4" {...props} />
+                    <blockquote className="pl-4 border-l-4 border-gray-600 italic text-gray-400 my-4" {...props} />
                   ),
-                  ul: ({node, ...props}) => <ul className="list-disc pl-5 mb-4" {...props} />,
-                  ol: ({node, ...props}) => <ol className="list-decimal pl-5 mb-4" {...props} />,
+                  ul: ({node, ...props}) => <ul className="list-disc pl-5 mb-4 text-gray-300" {...props} />,
+                  ol: ({node, ...props}) => <ol className="list-decimal pl-5 mb-4 text-gray-300" {...props} />,
                   li: ({node, ...props}) => <li className="mb-1" {...props} />,
                 }}
               >
@@ -242,7 +242,7 @@ export default function Home() {
         )}
       </div>
 
-      <footer className="mt-auto pt-8 text-center text-gray-500 text-sm">
+      <footer className="mt-auto pt-8 text-center text-gray-500 text-sm relative z-10">
         <p>Reformind - Biblical wisdom, Reformed truth.</p>
       </footer>
     </div>

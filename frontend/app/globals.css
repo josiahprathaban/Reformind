@@ -10,17 +10,30 @@ body {
 }
 
 body {
-  @apply bg-gray-50 text-gray-900;
+  @apply bg-dark-500 text-gray-200;
+  background: radial-gradient(circle at 50% 10%, #3e3833 0%, #1f1c19 70%);
+}
+
+/* Glass Effect Card */
+.glass-card {
+  @apply backdrop-blur-md bg-opacity-30 bg-dark-600/40 border border-primary-700/40 shadow-lg;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.055) 0%, rgba(121, 85, 45, 0.2) 100%);
 }
 
 .btn {
-  @apply px-4 py-2 rounded font-medium transition-colors;
+  @apply px-4 py-2 rounded font-medium transition-all duration-300;
 }
 
 .btn-primary {
-  @apply bg-primary-600 text-white hover:bg-primary-700;
+  @apply bg-primary-600 bg-opacity-90 text-white hover:bg-primary-500 shadow-md hover:shadow-primary-500/25;
 }
 
 .input {
-  @apply w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-primary-500;
+  @apply w-full p-3 bg-dark-600/40 text-white border border-primary-700/40 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 backdrop-blur-sm;
+}
+
+/* Error Card */
+.error-card {
+  @apply p-4 mb-4 backdrop-blur-md bg-opacity-30 bg-red-900/40 border border-red-700/70 text-red-200 rounded-lg shadow-lg;
+  background: linear-gradient(135deg, rgba(255, 50, 50, 0.1) 0%, rgba(180, 30, 30, 0.2) 100%);
 }
